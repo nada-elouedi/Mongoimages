@@ -66,42 +66,51 @@ pipeline {
             }
         }
 
-stage('Cosign Sign') {
-  steps {
-    script {
-      withCredentials([
-        usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
-        string(credentialsId: 'cosign_password', variable: 'COSIGN_PASSWORD')
-      ]) {
-        sh '''
-          echo "Setting up Docker authentication for Cosign signing..."
+        stage('Cosign Sign') {
+            steps {
+                script {
+                    withCredentials([
+                        usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
+                        string(credentialsId: 'cosign_password', variable: 'COSIGN_PASSWORD')
+                    ]) {
+                        sh '''
+                            echo "Setting up Docker authentication for Cosign signing..."
 
-          mkdir -p /var/lib/jenkins/.docker
+                            mkdir -p /var/lib/jenkins/.docker
 
-          # Encode Docker credentials in base64 without newline
-          AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\\n')
+                            # Encode Docker credentials in base64 without newline
+                            AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\\n')
 
-          # Create a valid Docker config.json with proper escaping
-          printf '{"auths":{"https://index.docker.io/v1/":{"auth":"%s"}}}' "$AUTH_B64" > /var/lib/jenkins/.docker/config.json
-          chmod 600 /var/lib/jenkins/.docker/config.json
-
-          echo "Docker config.json content:"
-          cat /var/lib/jenkins/.docker/config.json
-
-          # Verify cosign version
-          cosign version
-
-          # Export COSIGN_PASSWORD env var for cosign to pick up
-          export COSIGN_PASSWORD=${COSIGN_PASSWORD}
-
-          # Sign the Docker image
-          cosign sign --key cosign.key $REGISTRY_IMAGE
-        '''
-      }
+                            # Create a valid Docker config.json with proper JSON format
+                            cat > /var/lib/jenkins/.docker/config.json <<EOF
+{
+  "auths": {
+    "https://index.docker.io/v1/": {
+      "auth": "${AUTH_B64}"
     }
   }
 }
+EOF
+                            chmod 600 /var/lib/jenkins/.docker/config.json
 
+                            echo "Docker config.json content:"
+                            cat /var/lib/jenkins/.docker/config.json
+
+                            # Verify cosign version
+                            cosign version
+
+                            # Export COSIGN_PASSWORD env var for cosign to pick up
+                            export COSIGN_PASSWORD=${COSIGN_PASSWORD}
+
+                            # Use full image reference with digest for signing
+                            IMAGE_DIGEST=\$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
+                            echo "Signing image \$IMAGE_DIGEST with cosign..."
+                            cosign sign --key cosign.key --yes "\$IMAGE_DIGEST"
+                        '''
+                    }
+                }
+            }
+        }
 
         stage('Compliance Report') {
             steps {
