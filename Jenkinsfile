@@ -20,18 +20,17 @@ pipeline {
         }
 
         stage('Lint Dockerfile') {
-    steps {
-        sh '''
-            if command -v hadolint &> /dev/null; then
-                hadolint Dockerfile || echo "⚠️ Lint warnings detected"
-            else
-                echo "⚠️ hadolint non trouvé, veuillez l’installer sur la machine Jenkins"
-                exit 1
-            fi
-        '''
-    }
-}
-
+            steps {
+                sh '''
+                    if command -v hadolint &> /dev/null; then
+                        hadolint Dockerfile || echo "⚠️ Lint warnings detected"
+                    else
+                        echo "⚠️ hadolint non trouvé, veuillez l’installer sur la machine Jenkins"
+                        exit 1
+                    fi
+                '''
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
@@ -39,7 +38,7 @@ pipeline {
             }
         }
 
-       stage('Security Scan with Trivy') {
+        stage('Security Scan with Trivy') {
             steps {
                 sh '''
                     if command -v trivy &> /dev/null; then
@@ -50,31 +49,10 @@ pipeline {
                     fi
 
                     echo "🔍 Scan de sécurité avec Trivy..."
-trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} || true
+                    trivy image --exit-code 0 --severity CRITICAL,HIGH --format json --output reports/trivy-report.json ${DOCKER_IMAGE}:${VERSION} || true
                 '''
             }
         }
-stage('Cosign Sign') {
-    steps {
-        withCredentials([
-            file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
-            string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
-        ]) {
-            sh '''
-                # Set the password as an environment variable
-                export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
-                
-                # Sign the image (--yes flag suppresses prompts)
-                cosign sign --key "${COSIGN_KEY_FILE}" "${DOCKER_IMAGE}:${VERSION}"
-            '''
-        }
-    }
-}
-
-
-
-
-
 
         stage('Push to Docker Hub') {
             steps {
@@ -88,57 +66,65 @@ stage('Cosign Sign') {
             }
         }
 
-        stage('Compliance Report (Trivy JSON Export)') {
+        stage('Cosign Sign') {
             steps {
-                sh '''
-    echo "$COSIGN_PASSWORD" | cosign sign --key $COSIGN_KEY_FILE --yes ${DOCKER_IMAGE}:${VERSION}
-'''
-
-                archiveArtifacts artifacts: 'reports/trivy-report.json', fingerprint: true
+                withCredentials([
+                    file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
+                    string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                ]) {
+                    sh '''
+                        export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
+                        cosign sign --key "${COSIGN_KEY_FILE}" --yes ${DOCKER_IMAGE}:${VERSION}
+                    '''
+                }
             }
         }
 
+        stage('Compliance Report') {
+            steps {
+                archiveArtifacts artifacts: 'reports/trivy-report.json', fingerprint: true
+            }
+        }
     }
-post {
-    always {
-        echo '🧹 Nettoyage Docker local...'
-        sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
 
-        emailext (
-            subject: "📦 Trivy Report - ${JOB_NAME} #${BUILD_NUMBER}",
-            body: """
-                <p>Bonjour,</p>
-                <p>Le pipeline <b>${JOB_NAME}</b> (build #${BUILD_NUMBER}) a généré un rapport Trivy.</p>
-                <p>Status : <b>${currentBuild.currentResult}</b></p>
-                <p>Veuillez trouver ci-joint le rapport JSON du scan de sécurité Docker.</p>
-                <p>Cordialement,<br>Jenkins</p>
-            """,
-            mimeType: 'text/html',
-            to: 'nada.elouedi@esprit.tn',
-            attachmentsPattern: 'reports/trivy-report.json'
-        )
-    }
-    success {
-        echo '✅ Pipeline réussi.'
-        emailext(
-            subject: "Build succeeded: Job ${JOB_NAME} [#${BUILD_NUMBER}]",
-            body: "The build was successful.\n\nCheck console output at: ${BUILD_URL}",
-            to: 'nada.elouedi@esprit.tn',
-            from: 'elouedinada19@gmail.com',
-            mimeType: 'text/plain'
-        )
-    }
-    failure {
-        echo '🚨 Pipeline échoué.'
-        emailext(
-            subject: "❌ Build failed: Job ${JOB_NAME} [#${BUILD_NUMBER}]",
-            body: "The build has failed.\n\nCheck console output at: ${BUILD_URL}",
-            to: 'nada.elouedi@esprit.tn',
-            from: 'elouedinada19@gmail.com',
-            mimeType: 'text/plain'
-        )
+    post {
+        always {
+            echo '🧹 Nettoyage Docker local...'
+            sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
+
+            emailext (
+                subject: "📦 Trivy Report - ${JOB_NAME} #${BUILD_NUMBER}",
+                body: """
+                    <p>Bonjour,</p>
+                    <p>Le pipeline <b>${JOB_NAME}</b> (build #${BUILD_NUMBER}) a généré un rapport Trivy.</p>
+                    <p>Status : <b>${currentBuild.currentResult}</b></p>
+                    <p>Veuillez trouver ci-joint le rapport JSON du scan de sécurité Docker.</p>
+                    <p>Cordialement,<br>Jenkins</p>
+                """,
+                mimeType: 'text/html',
+                to: 'nada.elouedi@esprit.tn',
+                attachmentsPattern: 'reports/trivy-report.json'
+            )
+        }
+        success {
+            echo '✅ Pipeline réussi.'
+            emailext(
+                subject: "Build succeeded: Job ${JOB_NAME} [#${BUILD_NUMBER}]",
+                body: "The build was successful.\n\nCheck console output at: ${BUILD_URL}",
+                to: 'nada.elouedi@esprit.tn',
+                from: 'elouedinada19@gmail.com',
+                mimeType: 'text/plain'
+            )
+        }
+        failure {
+            echo '🚨 Pipeline échoué.'
+            emailext(
+                subject: "❌ Build failed: Job ${JOB_NAME} [#${BUILD_NUMBER}]",
+                body: "The build has failed.\n\nCheck console output at: ${BUILD_URL}",
+                to: 'nada.elouedi@esprit.tn',
+                from: 'elouedinada19@gmail.com',
+                mimeType: 'text/plain'
+            )
+        }
     }
 }
-
-}
-
