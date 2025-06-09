@@ -66,19 +66,19 @@ pipeline {
             }
         }
 
-        stage('Cosign Sign') {
+      stage('Cosign Sign') {
     steps {
         withCredentials([
             file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
             string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
-            usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
+            usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'COSIGN_DOCKER_USERNAME', passwordVariable: 'COSIGN_DOCKER_PASSWORD')
         ]) {
             sh '''
                 export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
-                export COSIGN_DOCKER_USERNAME="${DOCKER_USER}"
-                export COSIGN_DOCKER_PASSWORD="${DOCKER_PASS}"
+                export COSIGN_DOCKER_USERNAME="${COSIGN_DOCKER_USERNAME}"
+                export COSIGN_DOCKER_PASSWORD="${COSIGN_DOCKER_PASSWORD}"
 
-                cosign sign --key "${COSIGN_KEY_FILE}" --yes ${DOCKER_IMAGE}:${VERSION}
+                cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
             '''
         }
     }
