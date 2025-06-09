@@ -39,14 +39,17 @@ pipeline {
             }
         }
 
-        stage('Security Scan with Trivy') {
+       stage('Security Scan with Trivy') {
             steps {
                 sh '''
-                    if ! command -v trivy &> /dev/null; then
-                        echo "Installing Trivy..."
-                        wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.tar.gz | tar zxv
-                        mv trivy /usr/local/bin/
+                    if command -v trivy &> /dev/null; then
+                        echo "✅ Trivy est déjà installé : $(trivy --version)"
+                    else
+                        echo "❌ Trivy n'est pas installé sur cette machine."
+                        exit 1
                     fi
+
+                    echo "🔍 Scan de sécurité avec Trivy..."
                     trivy image --exit-code 1 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION}
                 '''
             }
