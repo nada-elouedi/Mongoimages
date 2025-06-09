@@ -66,7 +66,7 @@ pipeline {
             }
         }
 
- stage('Cosign Sign') {
+stage('Cosign Sign') {
     steps {
         script {
             withCredentials([
@@ -95,11 +95,15 @@ pipeline {
 
                     export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
 
-                    echo "Signature de l'image avec Cosign (par tag)..."
-                    cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
+                    # Récupération du digest de l'image
+                    IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
+                    echo "Image digest pour signature : ${IMAGE_DIGEST}"
 
-                    echo "Vérification de la signature (par tag)..."
-                    cosign verify --key "${COSIGN_KEY_FILE}" "${DOCKER_IMAGE}:${VERSION}"
+                    echo "Signature de l'image avec Cosign (par digest)..."
+                    cosign sign --key "${COSIGN_KEY_FILE}" --yes "${IMAGE_DIGEST}"
+
+                    echo "Vérification de la signature (par digest)..."
+                    cosign verify --key "${COSIGN_KEY_FILE}" "${IMAGE_DIGEST}"
 
                     echo "Déconnexion de Docker Hub..."
                     docker logout
@@ -113,6 +117,7 @@ pipeline {
         }
     }
 }
+
 
 
         stage('Compliance Report') {
