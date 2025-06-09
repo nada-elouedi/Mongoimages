@@ -20,17 +20,18 @@ pipeline {
         }
 
         stage('Lint Dockerfile') {
-            steps {
-                sh '''
-                    if ! command -v hadolint &> /dev/null; then
-                        echo "Installing hadolint..."
-                        wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
-                        chmod +x /usr/local/bin/hadolint
-                    fi
-                    hadolint Dockerfile || echo "⚠️ Lint warnings detected"
-                '''
-            }
-        }
+    steps {
+        sh '''
+            if command -v hadolint &> /dev/null; then
+                hadolint Dockerfile || echo "⚠️ Lint warnings detected"
+            else
+                echo "⚠️ hadolint non trouvé, veuillez l’installer sur la machine Jenkins"
+                exit 1
+            fi
+        '''
+    }
+}
+
 
         stage('Build Docker Image') {
             steps {
