@@ -56,14 +56,15 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
         }
 stage('Cosign Sign') {
     steps {
-        withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')]) {
+        withCredentials([file(credentialsId: 'cosign-key', variable: '')]) {
             sh '''
                 echo "Using cosign key file at $COSIGN_KEY_FILE"
-                cosign sign --key $COSIGN_KEY_FILE ${DOCKER_IMAGE}:${VERSION}
+                cosign sign --key $COSIGN_KEY_FILE --yes ${DOCKER_IMAGE}:${VERSION}
             '''
         }
     }
 }
+
 
 
         stage('Push to Docker Hub') {
