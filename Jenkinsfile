@@ -105,4 +105,5 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
         echo '✅ Pipeline réussi.'
     }
 }
+}
 
