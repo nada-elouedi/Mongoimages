@@ -59,7 +59,7 @@ stage('Sign Image') {
     withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')]) {
       sh '''
         export COSIGN_PASSWORD=""
-        cosign sign --key "$COSIGN_KEY_FILE" --batch --yes nadaelouedi/mongo:6.1
+cosign sign --yes ${DOCKER_IMAGE}:${VERSION}
       '''
     }
   }
