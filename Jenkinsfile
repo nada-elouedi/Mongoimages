@@ -87,9 +87,9 @@ stage('Cosign Sign') {
         stage('Compliance Report (Trivy JSON Export)') {
             steps {
                 sh '''
-                    mkdir -p reports
-                    trivy image --format json -o reports/trivy-report.json ${DOCKER_IMAGE}:${VERSION}
-                '''
+    echo "$COSIGN_PASSWORD" | cosign sign --key $COSIGN_KEY_FILE --yes ${DOCKER_IMAGE}:${VERSION}
+'''
+
                 archiveArtifacts artifacts: 'reports/trivy-report.json', fingerprint: true
             }
         }
