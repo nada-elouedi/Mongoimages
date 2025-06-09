@@ -93,7 +93,7 @@ post {
                 <p>Cordialement,<br>Jenkins</p>
             """,
             mimeType: 'text/html',
-            to: 'nadaelouedi@esprit.tn',
+            to: 'nada.elouedi@esprit.tn',
             attachmentsPattern: 'reports/trivy-report.json'
         )
     }
