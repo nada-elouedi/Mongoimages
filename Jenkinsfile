@@ -54,16 +54,20 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
                 '''
             }
         }
-stage('Sign Image') {
-  steps {
-    withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')]) {
-      sh '''
-        export COSIGN_PASSWORD=""
-cosign sign --yes ${DOCKER_IMAGE}:${VERSION}
-      '''
+stage('Cosign Sign') {
+    steps {
+        withCredentials([
+            file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')
+        ]) {
+            sh '''
+                echo "Using cosign key file at $COSIGN_KEY_FILE"
+                export COSIGN_PASSWORD=""
+                cosign sign --key $COSIGN_KEY_FILE --batch --yes ${DOCKER_IMAGE}:${VERSION}
+            '''
+        }
     }
-  }
 }
+
 
 
 
