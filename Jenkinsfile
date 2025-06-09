@@ -2,9 +2,8 @@ pipeline {
     agent any
 
     options {
-        // Timeout global pour éviter les builds bloqués
         timeout(time: 30, unit: 'MINUTES')
-        timestamps() // Ajoute des horodatages aux logs
+        timestamps()
     }
 
     environment {
@@ -13,15 +12,42 @@ pipeline {
     }
 
     stages {
-        stage('Clone Repo') {
+
+        stage('Checkout') {
             steps {
                 git branch: 'main', credentialsId: 'github', url: 'https://github.com/nada-elouedi/Mongoimages.git'
+            }
+        }
+
+        stage('Lint Dockerfile') {
+            steps {
+                sh '''
+                    if ! command -v hadolint &> /dev/null; then
+                        echo "Installing hadolint..."
+                        wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+                        chmod +x /usr/local/bin/hadolint
+                    fi
+                    hadolint Dockerfile || echo "⚠️ Lint warnings detected"
+                '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 sh "docker build --no-cache -t ${DOCKER_IMAGE}:${VERSION} ."
+            }
+        }
+
+        stage('Security Scan with Trivy') {
+            steps {
+                sh '''
+                    if ! command -v trivy &> /dev/null; then
+                        echo "Installing Trivy..."
+                        wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.tar.gz | tar zxv
+                        mv trivy /usr/local/bin/
+                    fi
+                    trivy image --exit-code 1 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION}
+                '''
             }
         }
 
@@ -36,18 +62,29 @@ pipeline {
                 }
             }
         }
+
+        stage('Compliance Report (Trivy JSON Export)') {
+            steps {
+                sh '''
+                    mkdir -p reports
+                    trivy image --format json -o reports/trivy-report.json ${DOCKER_IMAGE}:${VERSION}
+                '''
+                archiveArtifacts artifacts: 'reports/trivy-report.json', fingerprint: true
+            }
+        }
+
     }
 
     post {
         always {
-            echo 'Nettoyage des artefacts Docker...'
+            echo '🧹 Nettoyage Docker local...'
             sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
         }
         failure {
-            echo ' Le pipeline a échoué. Veuillez consulter les logs.'
+            echo '🚨 Pipeline échoué.'
         }
         success {
-            echo ' Pipeline exécuté avec succès.'
+            echo '✅ Pipeline réussi.'
         }
     }
 }
