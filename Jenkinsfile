@@ -66,44 +66,73 @@ pipeline {
             }
         }
 
-       stage('Cosign Sign') {
+stage('Cosign Sign') {
     steps {
         script {
             withCredentials([
-                usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
-                string(credentialsId: 'cosign_password', variable: 'COSIGN_PASSWORD')
+                file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
+                string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
+                usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
             ]) {
-                sh '''
-                    set -x  # active le debug shell
-
-                    echo "Setting up Docker authentication for Cosign signing..."
-
-                    mkdir -p /var/lib/jenkins/.docker
-
-                    AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\\n')
-
-                    cat > /var/lib/jenkins/.docker/config.json <<EOF
-{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "${AUTH_B64}"
-    }
-  }
-}
-EOF
-                    chmod 600 /var/lib/jenkins/.docker/config.json
-
-                    echo "Docker config.json content:"
-                    cat /var/lib/jenkins/.docker/config.json
-
-                    cosign version
-
-                    export COSIGN_PASSWORD=${COSIGN_PASSWORD}
-
-                    IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
-                    echo "Signing image $IMAGE_DIGEST with cosign..."
-                    cosign sign --key cosign.key --yes --verbose "$IMAGE_DIGEST"
-                '''
+                try {
+                    sh '''
+                        #!/bin/bash
+                        set -e
+                        
+                        echo "===== Début de la signature Cosign ====="
+                        echo "DOCKER_IMAGE=${DOCKER_IMAGE}"
+                        echo "VERSION=${VERSION}"
+                        
+                        # 1. Authentification Docker
+                        echo "Connexion à Docker Hub avec l'utilisateur ${DOCKER_USER}..."
+                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        
+                        # 2. Téléchargement de l'image si nécessaire
+                        echo "Pull de l'image ${DOCKER_IMAGE}:${VERSION}..."
+                        docker pull "${DOCKER_IMAGE}:${VERSION}"
+                        echo "Image ${DOCKER_IMAGE}:${VERSION} téléchargée avec succès."
+                        
+                        # 3. Configuration propre de l'authentification Cosign
+                        echo "Configuration de l'authentification Cosign..."
+                        mkdir -p ~/.docker
+                        cat > ~/.docker/config.json <<EOF
+                        {
+                            "auths": {
+                                "https://index.docker.io/v1/": {
+                                    "auth": "$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\n')"
+                                }
+                            }
+                        }
+                        EOF
+                        chmod 600 ~/.docker/config.json
+                        
+                        # 4. Signature avec Cosign (version robuste)
+                        echo "Signature de l'image avec Cosign..."
+                        export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
+                        
+                        # Option 1: Signature par tag (avec warning)
+                        cosign sign \
+                            --key "${COSIGN_KEY_FILE}" \
+                            --yes \
+                            --registry-auth \
+                            "${DOCKER_IMAGE}:${VERSION}"
+                        
+                        # Option 2: Alternative avec digest (recommandé)
+                        # DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${DOCKER_IMAGE}:${VERSION}")
+                        # cosign sign --key "${COSIGN_KEY_FILE}" --yes --registry-auth "${DIGEST}"
+                        
+                        echo "Signature réussie !"
+                    '''
+                } catch (Exception e) {
+                    error "Échec de la signature Cosign: ${e.getMessage()}"
+                    currentBuild.result = 'FAILURE'
+                } finally {
+                    sh '''
+                        # Nettoyage
+                        docker logout || true
+                        rm -f ~/.docker/config.json || true
+                    '''
+                }
             }
         }
     }
