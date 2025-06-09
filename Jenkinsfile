@@ -80,15 +80,27 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
     }
 
     post {
-        always {
-            echo '🧹 Nettoyage Docker local...'
-            sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
-        }
-        failure {
-            echo '🚨 Pipeline échoué.'
-        }
-        success {
-            echo '✅ Pipeline réussi.'
-        }
+    always {
+        echo ' Nettoyage Docker local...'
+        sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
+
+        // Envoi du rapport Trivy par email
+        emailext (
+            subject: "Rapport Trivy - ${JOB_NAME} [${BUILD_NUMBER}]",
+            body: """<p>Bonjour,</p>
+                     <p>Veuillez trouver ci-joint le rapport Trivy généré lors du pipeline <b>${JOB_NAME}</b> (build #${BUILD_NUMBER}).</p>
+                     <p>Statut du pipeline : <b>${currentBuild.currentResult}</b></p>
+                     <p>Cordialement,<br>Votre Jenkins</p>""",
+            mimeType: 'text/html',
+            to: 'nadaelouedi@esprit.tn'
+            attachLog: false,
+            attachmentsPattern: 'reports/trivy-report.json'
+        )
+    }
+    failure {
+        echo '🚨 Pipeline échoué.'
+    }
+    success {
+        echo '✅ Pipeline réussi.'
     }
 }
