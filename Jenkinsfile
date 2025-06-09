@@ -66,7 +66,7 @@ pipeline {
             }
         }
 
-     stage('Cosign Sign') {
+ stage('Cosign Sign') {
     steps {
         script {
             withCredentials([
@@ -88,25 +88,18 @@ pipeline {
                     docker pull ${DOCKER_IMAGE}:${VERSION}
                     echo "Image ${DOCKER_IMAGE}:${VERSION} téléchargée avec succès."
 
-                    FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
-                    if [ -z "$FULL_DIGEST" ]; then
-                      echo "Erreur : impossible de récupérer le digest de l'image."
-                      exit 1
-                    fi
-                    echo "Digest de l'image à signer : ${FULL_DIGEST}"
-
                     mkdir -p ~/.docker
-                    AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\n')
+                    AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\\n')
                     echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"${AUTH_B64}\"}}}" > ~/.docker/config.json
                     chmod 600 ~/.docker/config.json
 
                     export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
 
-                    echo "Signature de l'image avec Cosign..."
-                    cosign sign --key "${COSIGN_KEY_FILE}" --yes "${FULL_DIGEST}"
+                    echo "Signature de l'image avec Cosign (par tag)..."
+                    cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
 
-                    echo "Vérification de la signature..."
-                    cosign verify --key "${COSIGN_KEY_FILE}" "${FULL_DIGEST}"
+                    echo "Vérification de la signature (par tag)..."
+                    cosign verify --key "${COSIGN_KEY_FILE}" "${DOCKER_IMAGE}:${VERSION}"
 
                     echo "Déconnexion de Docker Hub..."
                     docker logout
