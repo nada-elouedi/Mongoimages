@@ -65,18 +65,56 @@ pipeline {
                 }
             }
         }
-stage('Cosign Sign (Local Only)') {
+stage('Cosign Sign') {
     steps {
-        withCredentials([
-            file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
-            string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
-        ]) {
-            sh '''
-                export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
+        script {
+            withCredentials([
+                file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
+                string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
+                usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
+            ]) {
+                try {
+                    sh '''
+                        # Debug: Afficher les informations d'authentification (à supprimer en production)
+                        echo "DOCKER_USER=${DOCKER_USER}"
+                        echo "COSIGN_PASSWORD length=${#COSIGN_PASSWORD}"
+                        echo "DOCKER_PASS length=${#DOCKER_PASS}"
 
-                # Signature locale, sans push de la signature sur le registre
-                cosign sign --key "${COSIGN_KEY_FILE}" --yes --local "${DOCKER_IMAGE}:${VERSION}"
-            '''
+                        # Authentification Docker
+                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+
+                        # Récupérer le digest complet de l'image
+                        FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
+                        echo "Signing image digest: ${FULL_DIGEST}"
+
+                        # Configurer l'authentification pour Cosign
+                        mkdir -p ~/.docker
+                        echo '{"auths":{"https://index.docker.io/v1/":{"auth":"'$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\n')'"}}}' > ~/.docker/config.json
+                        chmod 600 ~/.docker/config.json
+
+                        # Signer avec Cosign
+                        export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
+                        cosign sign \
+                            --key "${COSIGN_KEY_FILE}" \
+                            --yes \
+                            --registry-auth \
+                            "${FULL_DIGEST}"
+
+                        # Vérification de la signature
+                        cosign verify \
+                            --key "${COSIGN_KEY_FILE}" \
+                            "${FULL_DIGEST}"
+                    '''
+                } catch (Exception e) {
+                    error "Échec de la signature Cosign: ${e.getMessage()}"
+                } finally {
+                    // Nettoyage systématique
+                    sh '''
+                        docker logout || true
+                        rm -f ~/.docker/config.json || true
+                    '''
+                }
+            }
         }
     }
 }
