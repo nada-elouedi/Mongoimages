@@ -54,6 +54,24 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
                 '''
             }
         }
+stage('Cosign Sign') {
+    steps {
+        withCredentials([
+            file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY'),
+            string(credentialsId: 'COSIGN_KEY_PASS', variable: 'COSIGN_PASS')
+        ]) {
+            sh '''
+                if ! command -v cosign &> /dev/null; then
+                    echo "❌ cosign non trouvé"
+                    exit 1
+                fi
+
+                echo "🔐 Signature de l'image Docker avec cosign..."
+                echo $COSIGN_PASS | cosign sign --key $COSIGN_KEY --passphrase-stdin ${DOCKER_IMAGE}:${VERSION}
+            '''
+        }
+    }
+}
 
         stage('Push to Docker Hub') {
             steps {
