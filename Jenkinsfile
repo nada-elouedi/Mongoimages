@@ -54,13 +54,12 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
                 '''
             }
         }
-stage('Cosign Sign') {
+stage('Sign Image') {
   steps {
-    withCredentials([
-      file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')
-    ]) {
+    withCredentials([file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')]) {
       sh '''
-        cosign sign --key "$COSIGN_KEY_FILE" --yes ${DOCKER_IMAGE}:${VERSION}
+        export COSIGN_PASSWORD=""
+        cosign sign --key "$COSIGN_KEY_FILE" --batch --yes nadaelouedi/mongo:6.1
       '''
     }
   }
