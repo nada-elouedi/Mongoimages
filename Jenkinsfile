@@ -56,61 +56,64 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
-                        echo "$PASS" | docker login -u "$USER" --password-stdin
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         docker push ${DOCKER_IMAGE}:${VERSION}
                         docker logout
                     '''
                 }
             }
         }
-stage('Cosign Sign') {
-    steps {
-        script {
-            withCredentials([
-                file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
-                string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
-                usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
-            ]) {
-                try {
-                   sh '''
-    set -e
 
-    echo "Connexion à Docker Hub avec l'utilisateur ${DOCKER_USER}..."
-    echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+        stage('Cosign Sign') {
+            steps {
+                script {
+                    withCredentials([
+                        file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
+                        string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
+                        usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
+                    ]) {
+                        try {
+                            sh '''
+                                set -e
 
-    FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
-    if [ -z "$FULL_DIGEST" ]; then
-      echo "Erreur : impossible de récupérer le digest de l'image."
-      exit 1
-    fi
-    echo "Digest de l'image à signer : ${FULL_DIGEST}"
+                                echo "Connexion à Docker Hub avec l'utilisateur ${DOCKER_USER}..."
+                                echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
 
-    mkdir -p ~/.docker
-    AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\n')
-    echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"${AUTH_B64}\"}}}" > ~/.docker/config.json
-    chmod 600 ~/.docker/config.json
+                                echo "Pull de l'image ${DOCKER_IMAGE}:${VERSION}..."
+                                docker pull ${DOCKER_IMAGE}:${VERSION}
 
-    export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
+                                FULL_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
+                                if [ -z "$FULL_DIGEST" ]; then
+                                  echo "Erreur : impossible de récupérer le digest de l'image."
+                                  exit 1
+                                fi
+                                echo "Digest de l'image à signer : ${FULL_DIGEST}"
 
-    echo "Signature de l'image avec Cosign..."
-    cosign sign --key "${COSIGN_KEY_FILE}" --yes "${FULL_DIGEST}"
+                                mkdir -p ~/.docker
+                                AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\\n')
+                                echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"${AUTH_B64}\"}}}" > ~/.docker/config.json
+                                chmod 600 ~/.docker/config.json
 
-    echo "Vérification de la signature..."
-    cosign verify --key "${COSIGN_KEY_FILE}" "${FULL_DIGEST}"
+                                export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
 
-    echo "Déconnexion de Docker Hub..."
-    docker logout
-'''
+                                echo "Signature de l'image avec Cosign..."
+                                cosign sign --key "${COSIGN_KEY_FILE}" --yes "${FULL_DIGEST}"
 
+                                echo "Vérification de la signature..."
+                                cosign verify --key "${COSIGN_KEY_FILE}" "${FULL_DIGEST}"
+
+                                echo "Déconnexion de Docker Hub..."
+                                docker logout
+                            '''
+                        } catch (Exception e) {
+                            error "Échec de la signature Cosign: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-
 
         stage('Compliance Report') {
             steps {
