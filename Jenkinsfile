@@ -61,8 +61,11 @@ stage('Cosign Sign') {
             string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
         ]) {
             sh '''
+                # Set the password as an environment variable
                 export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
-                echo y | cosign sign --key ${COSIGN_KEY_FILE} --yes ${DOCKER_IMAGE}:${VERSION}
+                
+                # Sign the image (--yes flag suppresses prompts)
+                cosign sign --key "${COSIGN_KEY_FILE}" "${DOCKER_IMAGE}:${VERSION}"
             '''
         }
     }
