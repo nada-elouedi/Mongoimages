@@ -66,22 +66,21 @@ pipeline {
             }
         }
 
-      stage('Cosign Sign') {
-    steps {
-        withCredentials([
-            file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
-            string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
-            usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'COSIGN_DOCKER_USERNAME', passwordVariable: 'COSIGN_DOCKER_PASSWORD')
-        ]) {
-            sh '''
-                export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
-                export COSIGN_DOCKER_USERNAME="${COSIGN_DOCKER_USERNAME}"
-                export COSIGN_DOCKER_PASSWORD="${COSIGN_DOCKER_PASSWORD}"
-
-                cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
-            '''
-        }
+   stage('Cosign Sign') {
+  steps {
+    withCredentials([
+      file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
+      string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
+      usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'COSIGN_DOCKER_USERNAME', passwordVariable: 'COSIGN_DOCKER_PASSWORD')
+    ]) {
+      sh '''
+        export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
+        echo "$COSIGN_DOCKER_PASSWORD" | docker login -u "$COSIGN_DOCKER_USERNAME" --password-stdin
+        cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
+        docker logout
+      '''
     }
+  }
 }
 
         stage('Compliance Report') {
