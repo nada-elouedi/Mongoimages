@@ -91,10 +91,11 @@ stage('Cosign Sign') {
                         IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
                         echo "Digest complet de l'image : $IMAGE_DIGEST"
 
-                        mkdir -p ~/.docker
-                        AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\\n')
-                        echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"${AUTH_B64}\"}}}" > ~/.docker/config.json
-                        chmod 600 ~/.docker/config.json
+                      mkdir -p /var/lib/jenkins/.docker
+AUTH_B64=$(echo -n "${DOCKER_USER}:${DOCKER_PASS}" | base64 | tr -d '\n')
+echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"${AUTH_B64}\"}}}" > /var/lib/jenkins/.docker/config.json
+chmod 600 /var/lib/jenkins/.docker/config.json
+
 
                         export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
 
