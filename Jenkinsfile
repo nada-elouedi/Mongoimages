@@ -65,31 +65,17 @@ pipeline {
                 }
             }
         }
-stage('Cosign Sign') {
+stage('Cosign Sign (Local Only)') {
     steps {
         withCredentials([
             file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
-            string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
-            usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')
+            string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
         ]) {
             sh '''
                 export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
-                export COSIGN_DOCKER_USERNAME="${USER}"
-                export COSIGN_DOCKER_PASSWORD="${PASS}"
 
-                echo "COSIGN_DOCKER_USERNAME=$COSIGN_DOCKER_USERNAME"
-                echo "COSIGN_PASSWORD length=${#COSIGN_PASSWORD}"
-                echo "COSIGN_DOCKER_PASSWORD length=${#COSIGN_DOCKER_PASSWORD}"
-
-                echo "$COSIGN_DOCKER_PASSWORD" | docker login -u "$COSIGN_DOCKER_USERNAME" --password-stdin
-
-                # Récupérer le digest de l’image
-                digest=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
-                echo "Signing image digest: $digest"
-
-                cosign sign --key "${COSIGN_KEY_FILE}" --yes "$digest"
-
-                docker logout
+                # Signature locale, sans push de la signature sur le registre
+                cosign sign --key "${COSIGN_KEY_FILE}" --yes --local "${DOCKER_IMAGE}:${VERSION}"
             '''
         }
     }
