@@ -76,15 +76,18 @@ stage('Cosign Sign') {
                 export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
                 export COSIGN_DOCKER_USERNAME="${USER}"
                 export COSIGN_DOCKER_PASSWORD="${PASS}"
-                export COSIGN_EXPERIMENTAL=1
+
+                echo "COSIGN_DOCKER_USERNAME=$COSIGN_DOCKER_USERNAME"
+                echo "COSIGN_PASSWORD length=${#COSIGN_PASSWORD}"
+                echo "COSIGN_DOCKER_PASSWORD length=${#COSIGN_DOCKER_PASSWORD}"
 
                 echo "$COSIGN_DOCKER_PASSWORD" | docker login -u "$COSIGN_DOCKER_USERNAME" --password-stdin
 
-                # Optionnel : récupérer le digest d'abord (via docker inspect) et signer avec le digest
-                # digest=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
-                # cosign sign --key "${COSIGN_KEY_FILE}" --yes "$digest"
+                # Récupérer le digest de l’image
+                digest=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
+                echo "Signing image digest: $digest"
 
-                cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
+                cosign sign --key "${COSIGN_KEY_FILE}" --yes "$digest"
 
                 docker logout
             '''
