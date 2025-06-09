@@ -60,9 +60,8 @@ stage('Cosign Sign') {
             file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE')
         ]) {
             sh '''
-                echo "Using cosign key file at $COSIGN_KEY_FILE"
-                export COSIGN_PASSWORD=""
-                cosign sign --key $COSIGN_KEY_FILE --batch --yes ${DOCKER_IMAGE}:${VERSION}
+               cosign sign --yes ${DOCKER_IMAGE}:${VERSION}
+
             '''
         }
     }
