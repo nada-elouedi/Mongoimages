@@ -70,32 +70,28 @@ stage('Cosign Sign') {
         withCredentials([
             file(credentialsId: 'cosign-key', variable: 'COSIGN_KEY_FILE'),
             string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD'),
-            usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
+            usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')
         ]) {
             sh '''
-                # Configuration de l'authentification Docker pour Cosign
-                mkdir -p ~/.docker
-                echo "{\"auths\":{\"https://index.docker.io/v1/\":{\"auth\":\"$(echo -n ${DOCKER_USER}:${DOCKER_PASS} | base64 -w 0)\"}}}" > ~/.docker/config.json
-                
-                # Signature avec Cosign en utilisant le digest
                 export COSIGN_PASSWORD="${COSIGN_PASSWORD}"
-                
-                # Obtenir le digest de l'image
-                DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION} | cut -d'@' -f2)
-                
-                # Signer avec le digest et l'authentification du registre
-                cosign sign \
-                    --key "${COSIGN_KEY_FILE}" \
-                    --yes \
-                    --registry-auth \
-                    "${DOCKER_IMAGE}@${DIGEST}"
-                
-                # Nettoyage (optionnel)
-                rm -f ~/.docker/config.json
+                export COSIGN_DOCKER_USERNAME="${USER}"
+                export COSIGN_DOCKER_PASSWORD="${PASS}"
+                export COSIGN_EXPERIMENTAL=1
+
+                echo "$COSIGN_DOCKER_PASSWORD" | docker login -u "$COSIGN_DOCKER_USERNAME" --password-stdin
+
+                # Optionnel : récupérer le digest d'abord (via docker inspect) et signer avec le digest
+                # digest=$(docker inspect --format='{{index .RepoDigests 0}}' ${DOCKER_IMAGE}:${VERSION})
+                # cosign sign --key "${COSIGN_KEY_FILE}" --yes "$digest"
+
+                cosign sign --key "${COSIGN_KEY_FILE}" --yes "${DOCKER_IMAGE}:${VERSION}"
+
+                docker logout
             '''
         }
     }
 }
+
 
 
         stage('Compliance Report') {
