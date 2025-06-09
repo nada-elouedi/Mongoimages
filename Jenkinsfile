@@ -79,21 +79,22 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
 
     }
 
-    post {
+   post {
     always {
-        echo ' Nettoyage Docker local...'
+        echo '🧹 Nettoyage Docker local...'
         sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
 
-        // Envoi du rapport Trivy par email
         emailext (
-            subject: "Rapport Trivy - ${JOB_NAME} [${BUILD_NUMBER}]",
-            body: """<p>Bonjour,</p>
-                     <p>Veuillez trouver ci-joint le rapport Trivy généré lors du pipeline <b>${JOB_NAME}</b> (build #${BUILD_NUMBER}).</p>
-                     <p>Statut du pipeline : <b>${currentBuild.currentResult}</b></p>
-                     <p>Cordialement,<br>Votre Jenkins</p>""",
+            subject: "📦 Trivy Report - ${JOB_NAME} #${BUILD_NUMBER}",
+            body: """
+                <p>Bonjour,</p>
+                <p>Le pipeline <b>${JOB_NAME}</b> (build #${BUILD_NUMBER}) a généré un rapport Trivy.</p>
+                <p>Status : <b>${currentBuild.currentResult}</b></p>
+                <p>Veuillez trouver ci-joint le rapport JSON du scan de sécurité Docker.</p>
+                <p>Cordialement,<br>Jenkins</p>
+            """,
             mimeType: 'text/html',
-            to: 'nadaelouedi@esprit.tn'
-            attachLog: false,
+            to: 'nadaelouedi@esprit.tn',
             attachmentsPattern: 'reports/trivy-report.json'
         )
     }
@@ -104,3 +105,4 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
         echo '✅ Pipeline réussi.'
     }
 }
+
