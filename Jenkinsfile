@@ -78,8 +78,7 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
         }
 
     }
-
-   post {
+post {
     always {
         echo '🧹 Nettoyage Docker local...'
         sh "docker rmi ${DOCKER_IMAGE}:${VERSION} || true"
@@ -98,12 +97,27 @@ trivy image --exit-code 0 --severity CRITICAL,HIGH ${DOCKER_IMAGE}:${VERSION} ||
             attachmentsPattern: 'reports/trivy-report.json'
         )
     }
-    failure {
-        echo '🚨 Pipeline échoué.'
-    }
     success {
         echo '✅ Pipeline réussi.'
+        emailext(
+            subject: "Build succeeded: Job ${JOB_NAME} [#${BUILD_NUMBER}]",
+            body: "The build was successful.\n\nCheck console output at: ${BUILD_URL}",
+            to: 'nada.elouedi@esprit.tn',
+            from: 'elouedinada19@gmail.com',
+            mimeType: 'text/plain'
+        )
+    }
+    failure {
+        echo '🚨 Pipeline échoué.'
+        emailext(
+            subject: "❌ Build failed: Job ${JOB_NAME} [#${BUILD_NUMBER}]",
+            body: "The build has failed.\n\nCheck console output at: ${BUILD_URL}",
+            to: 'nada.elouedi@esprit.tn',
+            from: 'elouedinada19@gmail.com',
+            mimeType: 'text/plain'
+        )
     }
 }
+
 }
 
